@@ -5,7 +5,11 @@ import SwiftUI
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
     private var popover: NSPopover?
-    private var badgeCount: Int = 0
+    private var taskListWindow: NSWindow?
+    private var settingsWindow: NSWindow?
+    private var firstRunWindow: NSWindow?
+
+    private let appState = AppState()
     private let notifications = NotificationService()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -15,17 +19,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         notifications.statusItemBadgeUpdate = { [weak self] count in
             Task { @MainActor [weak self] in self?.updateBadge(count: count) }
         }
+        // Reflect initial pending count from the in-memory sample data.
+        notifications.updateBadge(pendingCount: appState.pendingCount)
     }
 
-    private func updateBadge(count: Int) {
-        badgeCount = count
-        guard let button = statusItem?.button else { return }
-        if count > 0 {
-            button.title = " \(count)"
-        } else {
-            button.title = ""
-        }
-    }
+    // MARK: - Status item
 
     private func setupStatusItem() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -39,12 +37,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem = item
     }
 
+    private func updateBadge(count: Int) {
+        guard let button = statusItem?.button else { return }
+        button.title = count > 0 ? " \(count)" : ""
+    }
+
+    // MARK: - Popover
+
     private func setupPopover() {
-        let popover = NSPopover()
-        popover.contentSize = NSSize(width: 380, height: 480)
-        popover.behavior = .transient
-        popover.contentViewController = NSHostingController(rootView: PlaceholderPopoverView())
-        self.popover = popover
+        let pop = NSPopover()
+        pop.contentSize = NSSize(width: 380, height: 420)
+        pop.behavior = .transient
+
+        let root = PopoverView(
+            onOpenTaskList: { [weak self] filter in
+                self?.openTaskList(initialFilter: filter)
+            },
+            onOpenSettings: { [weak self] in
+                self?.openSettings()
+            }
+        )
+        .environment(appState)
+        .environment(\.toraAccent, appState.accent.color)
+
+        pop.contentViewController = NSHostingController(rootView: root)
+        popover = pop
     }
 
     @objc private func togglePopover(_ sender: Any?) {
@@ -56,23 +73,80 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             popover.contentViewController?.view.window?.makeKey()
         }
     }
-}
 
-private struct PlaceholderPopoverView: View {
-    var body: some View {
-        VStack(spacing: 12) {
-            Image("Mascot")
-                .resizable()
-                .scaledToFit()
-                .frame(width: 64, height: 64)
-            Text("Tora")
-                .font(.system(size: 16, weight: .bold))
-            Text("Wave 1 scaffold — popover coming in Wave 3-A")
-                .font(.system(size: 11.5))
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
+    // MARK: - Detached windows
+
+    private func openTaskList(initialFilter: SidebarFilter) {
+        appState.sidebarFilter = initialFilter
+        if let window = taskListWindow {
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
         }
-        .padding(20)
-        .frame(width: 380, height: 200)
+
+        let view = TaskListView()
+            .environment(appState)
+            .environment(\.toraAccent, appState.accent.color)
+
+        let controller = NSHostingController(rootView: view)
+        let window = NSWindow(contentViewController: controller)
+        window.title = "Tora — Tasks"
+        window.setContentSize(NSSize(width: 780, height: 540))
+        window.styleMask = [.titled, .closable, .resizable, .miniaturizable]
+        window.titlebarAppearsTransparent = true
+        window.isReleasedWhenClosed = false
+        window.center()
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        taskListWindow = window
+    }
+
+    private func openSettings() {
+        if let window = settingsWindow {
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+
+        let view = SettingsView()
+            .environment(appState)
+            .environment(\.toraAccent, appState.accent.color)
+
+        let controller = NSHostingController(rootView: view)
+        let window = NSWindow(contentViewController: controller)
+        window.title = "Tora — Settings"
+        window.setContentSize(NSSize(width: 760, height: 520))
+        window.styleMask = [.titled, .closable, .resizable, .miniaturizable]
+        window.titlebarAppearsTransparent = true
+        window.isReleasedWhenClosed = false
+        window.center()
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        settingsWindow = window
+    }
+
+    func openFirstRun() {
+        if let window = firstRunWindow {
+            window.makeKeyAndOrderFront(nil)
+            return
+        }
+        let view = FirstRunView(onDone: { [weak self] in
+            self?.firstRunWindow?.close()
+            self?.firstRunWindow = nil
+        })
+        .environment(appState)
+        .environment(\.toraAccent, appState.accent.color)
+
+        let controller = NSHostingController(rootView: view)
+        let window = NSWindow(contentViewController: controller)
+        window.title = "Set up Tora"
+        window.setContentSize(NSSize(width: 720, height: 560))
+        window.styleMask = [.titled, .closable, .resizable]
+        window.titlebarAppearsTransparent = true
+        window.isReleasedWhenClosed = false
+        window.center()
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        firstRunWindow = window
     }
 }
