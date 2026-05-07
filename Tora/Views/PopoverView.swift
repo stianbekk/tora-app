@@ -230,6 +230,11 @@ struct PopoverView: View {
             Text("Sources").font(.system(size: 11)).foregroundStyle(ToraTokens.text3)
             sourceIndicator(name: "Slack", connected: state.slackConnected)
             sourceIndicator(name: "Gmail", connected: false)
+            if let label = backfillLabel {
+                Text(label)
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(accent)
+            }
             Spacer()
             Text("v0.1.0").font(.system(size: 10, design: .monospaced)).foregroundStyle(ToraTokens.text4)
         }
@@ -237,6 +242,14 @@ struct PopoverView: View {
         .padding(.vertical, 8)
         .background(ToraTokens.surface2)
         .overlay(alignment: .top) { Divider().background(ToraTokens.borderSoft) }
+    }
+
+    private var backfillLabel: String? {
+        switch state.backfillStatus {
+        case .running(let remaining): return "Catching up… (\(remaining))"
+        case .failed:                 return "Backfill failed"
+        case .idle, .done:            return nil
+        }
     }
 
     private func sourceIndicator(name: String, connected: Bool) -> some View {

@@ -11,15 +11,26 @@ final class AppCoordinator {
     let extraction: ExtractionService
     let relay: RelayServer
     let slackAdapter: SlackEventsAdapter
+    let backfill: SlackBackfillService
     let keychain: KeychainStore
 
     init() {
-        self.appState = AppState()
+        let appState = AppState()
+        let extraction = ExtractionService()
+        self.appState = appState
         self.notifications = NotificationService()
         self.keychain = KeychainStore()
-        self.extraction = ExtractionService()
+        self.extraction = extraction
         self.relay = RelayServer()
         self.slackAdapter = SlackEventsAdapter(extraction: extraction)
+        self.backfill = SlackBackfillService(
+            extraction: extraction,
+            onStatusChange: { status in
+                await MainActor.run {
+                    appState.backfillStatus = status
+                }
+            }
+        )
     }
 
     /// Bootstrap the coordinator. Called from AppDelegate.applicationDidFinishLaunching.
@@ -40,6 +51,7 @@ final class AppCoordinator {
         await slackAdapter.setBotToken(keychain.get(.slackBotToken))
         await slackAdapter.setSourceId("slack:default")
         await slackAdapter.setStateRefresher(appState)
+        await backfill.setSourceId("slack:default")
 
         // Hook the adapter into the relay server.
         await relay.setSlackHandler(slackAdapter)
@@ -73,6 +85,13 @@ final class AppCoordinator {
         } catch {
             logger.error("Failed to start relay: \(String(describing: error), privacy: .public)")
         }
+
+        // Catch up on messages we missed while offline.
+        if let token = keychain.get(.slackBotToken), !token.isEmpty {
+            Task.detached(priority: .background) { [backfill] in
+                await backfill.run(token: token)
+            }
+        }
     }
 
     func shutdown() async {
@@ -95,5 +114,13 @@ final class AppCoordinator {
         keychain.set(.slackBotToken, value: token)
         await slackAdapter.setBotToken(token)
         appState.slackConnected = !token.isEmpty
+
+        // First time the user pastes a token, kick off backfill so the app
+        // starts catching up immediately without waiting for the next launch.
+        if !token.isEmpty {
+            Task.detached(priority: .background) { [backfill] in
+                await backfill.run(token: token)
+            }
+        }
     }
 }

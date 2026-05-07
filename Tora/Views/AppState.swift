@@ -127,6 +127,9 @@ final class AppState {
     /// Reflects whether a Slack bot token has been saved. Powers the sources status indicator.
     var slackConnected: Bool = false
 
+    /// Latest backfill status — surfaced as "Catching up…" in the popover.
+    var backfillStatus: BackfillStatus = .idle
+
     // MARK: Dependencies
 
     private let suggestionsRepo: SuggestionRepository

@@ -28,6 +28,32 @@ struct SlackAPIClient: Sendable {
         return try await get(url: components.url!, token: token, decoding: SlackChannelInfoResponse.self).channel
     }
 
+    /// Pull a page of messages from a channel newer than `oldest` (Slack-format timestamp).
+    /// `cursor` advances through paginated results — pass nil for the first page,
+    /// then re-call with the returned `next_cursor` until it's nil.
+    func conversationsHistory(
+        channelId: String,
+        oldest: String?,
+        cursor: String?,
+        limit: Int = 200,
+        token: String
+    ) async throws -> SlackHistoryResponse {
+        let url = baseURL.appendingPathComponent("conversations.history")
+        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+        var items = [
+            URLQueryItem(name: "channel", value: channelId),
+            URLQueryItem(name: "limit", value: String(limit)),
+        ]
+        if let oldest, !oldest.isEmpty {
+            items.append(URLQueryItem(name: "oldest", value: oldest))
+        }
+        if let cursor, !cursor.isEmpty {
+            items.append(URLQueryItem(name: "cursor", value: cursor))
+        }
+        components.queryItems = items
+        return try await get(url: components.url!, token: token, decoding: SlackHistoryResponse.self)
+    }
+
     private func get<T: Decodable & Sendable>(
         url: URL, token: String, decoding: T.Type
     ) async throws -> T {
@@ -79,4 +105,27 @@ struct SlackChannel: Decodable, Sendable, Hashable {
         if let n = name { return "#\(n)" }
         return id
     }
+}
+
+// MARK: - History response
+
+struct SlackHistoryResponse: Decodable, Sendable {
+    let ok: Bool
+    let messages: [SlackHistoryMessage]?
+    let has_more: Bool?
+    let response_metadata: SlackResponseMetadata?
+}
+
+struct SlackHistoryMessage: Decodable, Sendable {
+    let type: String?
+    let subtype: String?
+    let user: String?
+    let bot_id: String?
+    let text: String?
+    let ts: String?
+    let thread_ts: String?
+}
+
+struct SlackResponseMetadata: Decodable, Sendable {
+    let next_cursor: String?
 }

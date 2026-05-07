@@ -51,6 +51,24 @@
 
 ---
 
+## Wave 7-E: Slack Offline Backfill
+
+**Depends on:** Wave 6
+**Parallel with:** 7-A, 7-B, 7-C, 7-D
+
+> Slack's Events API only retries failed webhooks for ~1 hour. If the user's Mac is off longer than that, messages are permanently lost. Backfill closes the gap by polling `conversations.history` since last-seen timestamp on each watched channel when Tora starts.
+
+| # | Task | Status | Description |
+|---|------|--------|-------------|
+| 7.19 | Track last-seen timestamp per channel | [x] | `SeenChannelStore` persists per-channel ts in the settings table; `SlackEventsAdapter` records on every event |
+| 7.20 | History fetch on bootstrap | [x] | `conversations.history` paginated; runs after relay starts and on first token save |
+| 7.21 | Backfill scope: channels + IMs | [x] | Discovered organically — every channel that has sent at least one event is backfilled |
+| 7.22 | Route backfill messages to extraction | [x] | `signal.contentHash` dedup protects against double-processing |
+| 7.23 | Show "Catching up…" indicator | [x] | Popover sources bar shows status while backfill runs |
+| 7.24 | Long-term: cloud relay | [ ] | v2 — buffer webhooks via Cloudflare Worker so Tora pulls a queue on connect |
+
+---
+
 ## Wave 7-D: Search + Snooze
 
 **Depends on:** Wave 6

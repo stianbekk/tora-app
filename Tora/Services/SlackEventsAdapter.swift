@@ -33,6 +33,7 @@ actor SlackEventsAdapter: SlackEventsHandler {
 
     private let api: SlackAPIClient
     private let extraction: ExtractionService
+    private let seenChannels: SeenChannelStore
     private weak var stateRefresh: StateRefresher?
 
     /// User-supplied Slack bot token (xoxb-...).
@@ -51,10 +52,12 @@ actor SlackEventsAdapter: SlackEventsHandler {
     init(
         api: SlackAPIClient = SlackAPIClient(),
         extraction: ExtractionService,
+        seenChannels: SeenChannelStore = SeenChannelStore(),
         stateRefresh: StateRefresher? = nil
     ) {
         self.api = api
         self.extraction = extraction
+        self.seenChannels = seenChannels
         self.stateRefresh = stateRefresh
     }
 
@@ -99,6 +102,11 @@ actor SlackEventsAdapter: SlackEventsHandler {
         )
 
         await extraction.enqueue(signal)
+
+        // Record this channel + ts so backfill knows where to resume next launch.
+        if let id = event.channel, let ts = event.ts {
+            seenChannels.record(channelId: id, name: channel, ts: ts)
+        }
     }
 
     // MARK: - Resolution with caching
