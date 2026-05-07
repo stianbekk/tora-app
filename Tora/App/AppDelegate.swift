@@ -1,13 +1,30 @@
 import AppKit
 import SwiftUI
 
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
     private var popover: NSPopover?
+    private var badgeCount: Int = 0
+    private let notifications = NotificationService()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupStatusItem()
         setupPopover()
+        Task { await notifications.bootstrap() }
+        notifications.statusItemBadgeUpdate = { [weak self] count in
+            Task { @MainActor [weak self] in self?.updateBadge(count: count) }
+        }
+    }
+
+    private func updateBadge(count: Int) {
+        badgeCount = count
+        guard let button = statusItem?.button else { return }
+        if count > 0 {
+            button.title = " \(count)"
+        } else {
+            button.title = ""
+        }
     }
 
     private func setupStatusItem() {
