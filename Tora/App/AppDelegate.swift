@@ -244,7 +244,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let controller = NSHostingController(rootView: view)
         let window = NSWindow(contentViewController: controller)
         window.title = "Set up Tora"
-        window.setContentSize(NSSize(width: 720, height: 560))
+        window.setContentSize(NSSize(width: 720, height: 700))
         window.styleMask = [.titled, .closable, .resizable]
         window.titlebarAppearsTransparent = true
         window.isReleasedWhenClosed = false

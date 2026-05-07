@@ -218,36 +218,40 @@ private struct ApiKeyStep: View {
 
 private struct ConnectSlackStep: View {
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 12) {
             Text("Connect Slack").font(.system(size: 22, weight: .bold)).tracking(-0.4)
             Text("Tora installs as a Slack app in your workspace. It needs read access to channels you choose so it can spot actionable messages. You can change selected channels any time.")
-                .font(.system(size: 13))
+                .font(.system(size: 12.5))
                 .foregroundStyle(ToraTokens.text3)
+                .fixedSize(horizontal: false, vertical: true)
 
-            VStack(spacing: 14) {
+            HStack(spacing: 14) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 11)
+                    RoundedRectangle(cornerRadius: 10)
                         .fill(Color(red: 0.29, green: 0.08, blue: 0.29))
-                        .frame(width: 52, height: 52)
-                    Image(systemName: ToraIcon.slack).font(.system(size: 26)).foregroundStyle(.white)
+                        .frame(width: 44, height: 44)
+                    Image(systemName: ToraIcon.slack).font(.system(size: 22)).foregroundStyle(.white)
                 }
-                Text("Add Tora to your workspace").font(.system(size: 14, weight: .semibold))
-                Text("Opens slack.com in your browser").font(.system(size: 11.5)).foregroundStyle(ToraTokens.text3)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Add Tora to your workspace").font(.system(size: 13.5, weight: .semibold))
+                    Text("Opens slack.com in your browser").font(.system(size: 11.5)).foregroundStyle(ToraTokens.text3)
+                }
+                Spacer()
                 Button {} label: {
                     HStack(spacing: 6) {
-                        Image(systemName: ToraIcon.slack).font(.system(size: 13))
+                        Image(systemName: ToraIcon.slack).font(.system(size: 12))
                         Text("Add to Slack")
                     }
                 }
                 .buttonStyle(.toraPrimary)
             }
-            .padding(22)
+            .padding(14)
             .frame(maxWidth: .infinity)
             .background(ToraTokens.surface2)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(ToraTokens.border, lineWidth: 0.5))
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(ToraTokens.border, lineWidth: 0.5))
 
-            Text("REQUIRED SCOPES").uppercaseSectionStyle().padding(.top, 6)
+            Text("REQUIRED SCOPES").uppercaseSectionStyle().padding(.top, 4)
 
             VStack(spacing: 0) {
                 scopeRow("channels:history", "Read public channel messages", divider: true)
@@ -266,13 +270,13 @@ private struct ConnectSlackStep: View {
     private func scopeRow(_ scope: String, _ desc: String, divider: Bool) -> some View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
-                Image(systemName: ToraIcon.check).font(.system(size: 13)).foregroundStyle(AccentPreset.tora.color)
+                Image(systemName: ToraIcon.check).font(.system(size: 12)).foregroundStyle(AccentPreset.tora.color)
                 Text(scope).font(.system(size: 11.5, design: .monospaced)).foregroundStyle(ToraTokens.text)
                 Spacer()
                 Text(desc).font(.system(size: 11.5)).foregroundStyle(ToraTokens.text3)
             }
             .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            .padding(.vertical, 8)
             if divider { Divider().background(ToraTokens.border) }
         }
     }
