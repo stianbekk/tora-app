@@ -124,6 +124,9 @@ final class AppState {
     /// Used by AppDelegate to decide if the first-run wizard should appear.
     var firstRunComplete: Bool = false
 
+    /// Reflects whether a Slack bot token has been saved. Powers the sources status indicator.
+    var slackConnected: Bool = false
+
     // MARK: Dependencies
 
     private let suggestionsRepo: SuggestionRepository
@@ -155,9 +158,63 @@ final class AppState {
     // MARK: - Bootstrap
 
     func bootstrap() {
-        seedIfNeeded()
+        clearLegacyDemoSeedIfNeeded()
         loadPreferences()
         reload()
+    }
+
+    /// One-time cleanup: earlier dev builds seeded demo customers/products/tasks/suggestions.
+    /// Anyone who launched those builds has a `seeded_v1` flag in settings and rows tied
+    /// to the synthetic `demo:slack` source plus a few orphan tasks with no FK link.
+    /// Wipe them so the first-run wizard does the real onboarding.
+    private func clearLegacyDemoSeedIfNeeded() {
+        guard preferences.string(.seededV1ClearedV2) != "true" else { return }
+        do {
+            // Delete suggestions tied to the demo source (cascade) and the source itself.
+            try sourcesRepo.delete(id: "demo:slack")
+
+            // Delete the named demo customers/products and any tasks linked to them.
+            let demoCustomerNames = ["Megaflis", "VPG"]
+            let demoProductNames  = ["Ticket Agent", "Shop Assistant"]
+            for name in demoCustomerNames {
+                if let c = try customersRepo.findByName(name) {
+                    for t in try tasksRepo.forCustomer(c.id) {
+                        try tasksRepo.delete(id: t.id)
+                    }
+                    try customersRepo.delete(id: c.id)
+                }
+            }
+            for name in demoProductNames {
+                if let p = try productsRepo.findByName(name) {
+                    for t in try tasksRepo.forProduct(p.id) {
+                        try tasksRepo.delete(id: t.id)
+                    }
+                    try productsRepo.delete(id: p.id)
+                }
+            }
+
+            // Catch the orphan demo tasks that had no FK links.
+            let orphanTitles: Set<String> = [
+                "Draft Q2 board update for Megaflis",
+                "Review Ticket Agent dedup spec",
+                "Reply to VPG procurement contract redlines",
+                "Update Stripe pricing tiers in admin",
+                "Reply to Frank re: SOC2 timeline",
+                "Send Megaflis renewal proposal",
+                "Onboard Sondre to ops Slack",
+                "Test Ticket Agent webhook with VPG sandbox",
+                "Merge GRDB upgrade branch",
+                "Confirm investor lunch with Astrid",
+            ]
+            let allTasks = try tasksRepo.allOpen() + tasksRepo.completedToday()
+            for task in allTasks where orphanTitles.contains(task.title) {
+                try tasksRepo.delete(id: task.id)
+            }
+        } catch {
+            print("Demo cleanup failed: \(error)")
+        }
+        preferences.setString(.seededV1Cleared, "true")
+        preferences.setString(.seededV1ClearedV2, "true")
     }
 
     private func loadPreferences() {
@@ -368,109 +425,4 @@ final class AppState {
     var customerNames: [String] { customers.map(\.name) }
     var productNames: [String] { products.map(\.name) }
 
-    // MARK: - Demo seeding
-
-    private func seedIfNeeded() {
-        do {
-            let already = try settingsRepo.get("seeded_v1") == "true"
-            if already { return }
-
-            let now = Date()
-            let cal = Calendar.current
-
-            // Customers
-            let c1 = Customer(id: UUID().uuidString, name: "Megaflis", notes: nil, createdAt: now)
-            let c2 = Customer(id: UUID().uuidString, name: "VPG", notes: nil, createdAt: now)
-            try customersRepo.save(c1)
-            try customersRepo.save(c2)
-
-            // Products
-            let p1 = Product(id: UUID().uuidString, name: "Ticket Agent", customerId: c1.id, notes: nil, createdAt: now)
-            let p2 = Product(id: UUID().uuidString, name: "Shop Assistant", customerId: c2.id, notes: nil, createdAt: now)
-            try productsRepo.save(p1)
-            try productsRepo.save(p2)
-
-            // Source for demo suggestions
-            let demoSource = Source(
-                id: "demo:slack", type: .slack, label: "Demo Workspace",
-                config: nil, active: true, createdAt: now
-            )
-            try sourcesRepo.save(demoSource)
-
-            // Tasks
-            let tasks: [ToraTask] = [
-                .init(id: UUID().uuidString, suggestionId: nil,
-                      title: "Draft Q2 board update for Megaflis",
-                      notes: "Include MRR delta, churn analysis, hiring plan.",
-                      priority: .high,
-                      dueDate: cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: now)),
-                      customerId: c1.id, productId: nil,
-                      completed: false, completedAt: nil, createdAt: now, updatedAt: now),
-                .init(id: UUID().uuidString, suggestionId: nil,
-                      title: "Review Ticket Agent dedup spec", notes: nil,
-                      priority: .medium,
-                      dueDate: cal.startOfDay(for: now),
-                      customerId: c1.id, productId: p1.id,
-                      completed: false, completedAt: nil, createdAt: now, updatedAt: now),
-                .init(id: UUID().uuidString, suggestionId: nil,
-                      title: "Reply to VPG procurement contract redlines",
-                      notes: "Legal flagged §7.2 indemnification clause.",
-                      priority: .high,
-                      dueDate: cal.startOfDay(for: now),
-                      customerId: c2.id, productId: p2.id,
-                      completed: false, completedAt: nil, createdAt: now, updatedAt: now),
-                .init(id: UUID().uuidString, suggestionId: nil,
-                      title: "Update Stripe pricing tiers in admin", notes: nil,
-                      priority: .low,
-                      dueDate: cal.date(byAdding: .day, value: 3, to: now),
-                      customerId: nil, productId: nil,
-                      completed: false, completedAt: nil, createdAt: now, updatedAt: now),
-                .init(id: UUID().uuidString, suggestionId: nil,
-                      title: "Reply to Frank re: SOC2 timeline", notes: nil,
-                      priority: .medium,
-                      dueDate: cal.startOfDay(for: now),
-                      customerId: c1.id, productId: nil,
-                      completed: true,
-                      completedAt: cal.date(bySettingHour: 9, minute: 14, second: 0, of: now),
-                      createdAt: now, updatedAt: now),
-            ]
-            for t in tasks { try tasksRepo.save(t) }
-
-            // Suggestions
-            let suggestions: [Suggestion] = [
-                .init(id: UUID().uuidString, sourceId: demoSource.id,
-                      title: "Send updated pricing doc to Megaflis",
-                      sourcePerson: "Frank Halvorsen", sourceChannel: "DM",
-                      urgency: .high,
-                      suggestedDue: cal.startOfDay(for: now),
-                      contextSnippet: "Frank needs pricing doc for Thursday board meeting.",
-                      customerId: c1.id, productId: nil,
-                      rawSignalHash: "demo-1", status: .pending,
-                      createdAt: now.addingTimeInterval(-120), actedAt: nil),
-                .init(id: UUID().uuidString, sourceId: demoSource.id,
-                      title: "Review PR #142 before Friday deploy",
-                      sourcePerson: "Eirik Sandvik", sourceChannel: "#dev",
-                      urgency: .medium,
-                      suggestedDue: cal.date(byAdding: .day, value: 2, to: cal.startOfDay(for: now)),
-                      contextSnippet: "Touches ticket dedup logic — review before ship.",
-                      customerId: c1.id, productId: p1.id,
-                      rawSignalHash: "demo-2", status: .pending,
-                      createdAt: now.addingTimeInterval(-840), actedAt: nil),
-                .init(id: UUID().uuidString, sourceId: demoSource.id,
-                      title: "Schedule onboarding call with VPG team",
-                      sourcePerson: "Lise Bjørnstad", sourceChannel: "Inbox",
-                      urgency: .medium,
-                      suggestedDue: cal.date(byAdding: .day, value: 5, to: cal.startOfDay(for: now)),
-                      contextSnippet: "VPG team wants 30-min onboarding next Tue or Wed afternoon.",
-                      customerId: c2.id, productId: p2.id,
-                      rawSignalHash: "demo-3", status: .pending,
-                      createdAt: now.addingTimeInterval(-2280), actedAt: nil),
-            ]
-            for s in suggestions { try suggestionsRepo.save(s) }
-
-            try settingsRepo.set("seeded_v1", value: "true")
-        } catch {
-            print("Seed failed: \(error)")
-        }
-    }
 }

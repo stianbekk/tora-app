@@ -228,14 +228,8 @@ struct PopoverView: View {
     private var sourcesBar: some View {
         HStack(spacing: 10) {
             Text("Sources").font(.system(size: 11)).foregroundStyle(ToraTokens.text3)
-            HStack(spacing: 4) {
-                Circle().fill(.green).frame(width: 6, height: 6)
-                Text("Slack").font(.system(size: 11)).foregroundStyle(ToraTokens.text3)
-            }
-            HStack(spacing: 4) {
-                Circle().fill(.green).frame(width: 6, height: 6)
-                Text("Gmail").font(.system(size: 11)).foregroundStyle(ToraTokens.text3)
-            }
+            sourceIndicator(name: "Slack", connected: state.slackConnected)
+            sourceIndicator(name: "Gmail", connected: false)
             Spacer()
             Text("v0.1.0").font(.system(size: 10, design: .monospaced)).foregroundStyle(ToraTokens.text4)
         }
@@ -243,6 +237,15 @@ struct PopoverView: View {
         .padding(.vertical, 8)
         .background(ToraTokens.surface2)
         .overlay(alignment: .top) { Divider().background(ToraTokens.borderSoft) }
+    }
+
+    private func sourceIndicator(name: String, connected: Bool) -> some View {
+        HStack(spacing: 4) {
+            Circle()
+                .fill(connected ? Color.green : ToraTokens.text4)
+                .frame(width: 6, height: 6)
+            Text(name).font(.system(size: 11)).foregroundStyle(ToraTokens.text3)
+        }
     }
 }
 

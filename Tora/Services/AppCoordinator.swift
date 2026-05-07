@@ -25,6 +25,7 @@ final class AppCoordinator {
     /// Bootstrap the coordinator. Called from AppDelegate.applicationDidFinishLaunching.
     func bootstrap() async {
         appState.bootstrap()
+        appState.slackConnected = keychain.get(.slackBotToken) != nil
         await notifications.bootstrap()
 
         // Configure extraction with the persisted API key + default model.
@@ -93,5 +94,6 @@ final class AppCoordinator {
     func updateSlackToken(_ token: String) async {
         keychain.set(.slackBotToken, value: token)
         await slackAdapter.setBotToken(token)
+        appState.slackConnected = !token.isEmpty
     }
 }

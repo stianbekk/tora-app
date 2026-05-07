@@ -16,6 +16,9 @@ struct PreferencesStore: Sendable {
         case notifHighUrgency   = "notif_high_urgency"
         case notifMediumUrgency = "notif_medium_urgency"
         case notifLowUrgency    = "notif_low_urgency"
+        /// Legacy: marks that earlier dev builds' demo data has been cleaned up.
+        case seededV1Cleared    = "seeded_v1_cleared"
+        case seededV1ClearedV2  = "seeded_v1_cleared_v2"
     }
 
     let repo: SettingsRepository
