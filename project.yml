@@ -1,0 +1,93 @@
+name: Tora
+options:
+  bundleIdPrefix: ai.truste
+  deploymentTarget:
+    macOS: "14.0"
+  developmentLanguage: en
+  xcodeVersion: "16.0"
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+  groupSortPosition: top
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
+    ENABLE_HARDENED_RUNTIME: YES
+    DEAD_CODE_STRIPPING: YES
+
+packages:
+  GRDB:
+    url: https://github.com/groue/GRDB.swift
+    from: 6.29.0
+  Hummingbird:
+    url: https://github.com/hummingbird-project/hummingbird
+    from: 2.5.0
+  KeychainAccess:
+    url: https://github.com/kishikawakatsumi/KeychainAccess
+    from: 4.2.2
+
+targets:
+  Tora:
+    type: application
+    platform: macOS
+    sources:
+      - path: Tora
+        excludes:
+          - "Resources/Info.plist"
+    resources:
+      - path: Tora/Resources/Assets.xcassets
+    info:
+      path: Tora/Resources/Info.plist
+      properties:
+        LSUIElement: true
+        NSHumanReadableCopyright: "Copyright © 2026 Truste AI. MIT licensed."
+        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "1"
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: ai.truste.Tora
+        PRODUCT_NAME: Tora
+        INFOPLIST_KEY_NSHumanReadableCopyright: "Copyright © 2026 Truste AI"
+        CODE_SIGN_STYLE: Automatic
+        ENABLE_PREVIEWS: YES
+        COMBINE_HIDPI_IMAGES: YES
+    dependencies:
+      - package: GRDB
+      - package: Hummingbird
+      - package: KeychainAccess
+
+  ToraTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: ToraTests
+    dependencies:
+      - target: Tora
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: ai.truste.ToraTests
+        GENERATE_INFOPLIST_FILE: YES
+        BUNDLE_LOADER: "$(TEST_HOST)"
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Tora.app/Contents/MacOS/Tora"
+
+schemes:
+  Tora:
+    build:
+      targets:
+        Tora: all
+        ToraTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - ToraTests
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release
