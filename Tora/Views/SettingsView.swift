@@ -34,7 +34,12 @@ enum SettingsTab: String, CaseIterable, Identifiable {
 }
 
 struct SettingsView: View {
+    let coordinator: AppCoordinator?
     @State private var selectedTab: SettingsTab = .sources
+
+    init(coordinator: AppCoordinator? = nil) {
+        self.coordinator = coordinator
+    }
 
     var body: some View {
         HSplitView {
@@ -83,8 +88,8 @@ struct SettingsView: View {
     private var content: some View {
         switch selectedTab {
         case .general:       GeneralPane()
-        case .sources:       SourcesPane()
-        case .ai:            AIExtractionPane()
+        case .sources:       SourcesPane(coordinator: coordinator)
+        case .ai:            AIExtractionPane(coordinator: coordinator)
         case .customers:     CustomersPane()
         case .shortcuts:     ShortcutsPane()
         case .notifications: NotificationsPane()
@@ -273,6 +278,15 @@ private struct GeneralPane: View {
 // MARK: - Sources
 
 private struct SourcesPane: View {
+    let coordinator: AppCoordinator?
+    @State private var slackToken: String = ""
+    @State private var slackTokenSet: Bool = false
+
+    init(coordinator: AppCoordinator?) {
+        self.coordinator = coordinator
+        _slackTokenSet = State(initialValue: coordinator?.keychain.get(.slackBotToken) != nil)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             PaneHeader(
@@ -281,17 +295,41 @@ private struct SourcesPane: View {
             )
 
             Section {
-                sourceRow(label: "Slack", subtitle: "Not connected", connected: false, divider: true)
+                sourceRow(
+                    label: "Slack",
+                    subtitle: slackTokenSet ? "Bot token configured" : "Not connected",
+                    connected: slackTokenSet,
+                    divider: true
+                )
                 sourceRow(label: "Gmail", subtitle: "Not connected (v1)", connected: false, divider: false)
             }
 
-            Button {} label: {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("SLACK BOT TOKEN").uppercaseSectionStyle()
+                Text("Paste a Slack bot token (xoxb-…) to start receiving events. See docs/setup-slack.md for app creation and ngrok setup.")
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(ToraTokens.text3)
                 HStack(spacing: 6) {
-                    Image(systemName: ToraIcon.plus).font(.system(size: 11))
-                    Text("Add source")
+                    SecureField("xoxb-…", text: $slackToken)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 12.5, design: .monospaced))
+                        .padding(.horizontal, 12)
+                        .frame(height: 30)
+                        .background(ToraTokens.surface)
+                        .clipShape(RoundedRectangle(cornerRadius: 7))
+                        .overlay(RoundedRectangle(cornerRadius: 7).stroke(ToraTokens.borderStrong, lineWidth: 0.5))
+                    Button("Save") {
+                        let coord = coordinator
+                        let token = slackToken
+                        Task { await coord?.updateSlackToken(token) }
+                        slackToken = ""
+                        slackTokenSet = true
+                    }
+                    .buttonStyle(.toraPrimary)
+                    .disabled(slackToken.isEmpty)
                 }
             }
-            .buttonStyle(.toraSecondary)
+            .padding(.top, 18)
         }
     }
 
@@ -331,8 +369,15 @@ private struct SourcesPane: View {
 // MARK: - AI Extraction
 
 private struct AIExtractionPane: View {
+    let coordinator: AppCoordinator?
     @State private var apiKey: String = ""
+    @State private var apiKeySet: Bool = false
     @State private var batchInterval: String = "30 seconds"
+
+    init(coordinator: AppCoordinator?) {
+        self.coordinator = coordinator
+        _apiKeySet = State(initialValue: coordinator?.keychain.get(.openAIAPIKey) != nil)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -363,12 +408,30 @@ private struct AIExtractionPane: View {
                 SectionRow {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("OpenAI API key").font(.system(size: 13, weight: .semibold))
-                        Text("Stored in macOS Keychain · never sent except to OpenAI")
+                        Text(apiKeySet ? "Stored in macOS Keychain" : "Not configured")
                             .font(.system(size: 11, design: .monospaced))
                             .foregroundStyle(ToraTokens.text3)
                     }
                 } trailing: {
-                    Button("Change") {}.buttonStyle(.toraSecondary)
+                    HStack(spacing: 6) {
+                        SecureField("sk-…", text: $apiKey)
+                            .textFieldStyle(.plain)
+                            .font(.system(size: 11.5, design: .monospaced))
+                            .padding(.horizontal, 10)
+                            .frame(width: 200, height: 28)
+                            .background(ToraTokens.surface)
+                            .clipShape(RoundedRectangle(cornerRadius: 7))
+                            .overlay(RoundedRectangle(cornerRadius: 7).stroke(ToraTokens.borderStrong, lineWidth: 0.5))
+                        Button("Save") {
+                            let coord = coordinator
+                            let key = apiKey
+                            Task { await coord?.updateAPIKey(key) }
+                            apiKey = ""
+                            apiKeySet = true
+                        }
+                        .buttonStyle(.toraSecondary)
+                        .disabled(apiKey.isEmpty)
+                    }
                 }
 
                 SectionRow(divider: false) {

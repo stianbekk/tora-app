@@ -56,6 +56,9 @@ actor ExtractionService {
     var model: ModelOption = .defaultModel
     var apiKey: String?
 
+    /// Called after a new suggestion is persisted. Fires on the actor's executor.
+    var onSuggestionCreated: (@Sendable (Suggestion) async -> Void)?
+
     init(
         client: OpenAIClient = OpenAIClient(),
         suggestions: SuggestionRepository = SuggestionRepository(),
@@ -72,6 +75,10 @@ actor ExtractionService {
         self.apiKey = apiKey
         self.model = model
         self.batchInterval = batchInterval
+    }
+
+    func setSuggestionCreatedHandler(_ handler: @escaping @Sendable (Suggestion) async -> Void) {
+        self.onSuggestionCreated = handler
     }
 
     /// Add a signal to the buffer. Schedules a flush if one isn't pending.
@@ -139,18 +146,18 @@ actor ExtractionService {
             guard result.isActionable, let extracted = result.task else { return }
             stats.tasksExtracted += 1
 
-            try persist(extracted, signal: signal)
+            try await persist(extracted, signal: signal)
         } catch {
             logger.error("Extraction failed: \(String(describing: error), privacy: .public)")
         }
     }
 
-    private func persist(_ extracted: ExtractedTask, signal: Signal) throws {
+    private func persist(_ extracted: ExtractedTask, signal: Signal) async throws {
         let customerId = try matchCustomer(name: extracted.customer)
         let productId  = try matchProduct(name: extracted.product)
         let due        = parseDate(extracted.suggestedDue)
 
-        var suggestion = Suggestion(
+        let suggestion = Suggestion(
             id: UUID().uuidString,
             sourceId: signal.sourceId,
             title: extracted.title,
@@ -167,7 +174,10 @@ actor ExtractionService {
             actedAt: nil
         )
         try suggestions.save(suggestion)
-        _ = suggestion // (kept intentionally for future; save() may mutate id later)
+
+        if let handler = onSuggestionCreated {
+            await handler(suggestion)
+        }
     }
 
     private func matchCustomer(name: String?) throws -> String? {

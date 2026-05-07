@@ -8,19 +8,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var taskListWindow: NSWindow?
     private var settingsWindow: NSWindow?
     private var firstRunWindow: NSWindow?
+    private var toastWindow: NSWindow?
 
-    private let appState = AppState()
-    private let notifications = NotificationService()
+    private let coordinator = AppCoordinator()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupStatusItem()
         setupPopover()
-        Task { await notifications.bootstrap() }
-        notifications.statusItemBadgeUpdate = { [weak self] count in
+        Task { @MainActor in
+            await coordinator.bootstrap()
+            updateBadge(count: coordinator.appState.pendingCount)
+            startToastWatcher()
+        }
+        coordinator.notifications.statusItemBadgeUpdate = { [weak self] count in
             Task { @MainActor [weak self] in self?.updateBadge(count: count) }
         }
-        // Reflect initial pending count from the in-memory sample data.
-        notifications.updateBadge(pendingCount: appState.pendingCount)
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        let coord = coordinator
+        Task { await coord.shutdown() }
     }
 
     // MARK: - Status item
@@ -57,8 +64,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.openSettings()
             }
         )
-        .environment(appState)
-        .environment(\.toraAccent, appState.accent.color)
+        .environment(coordinator.appState)
+        .environment(\.toraAccent, coordinator.appState.accent.color)
 
         pop.contentViewController = NSHostingController(rootView: root)
         popover = pop
@@ -69,6 +76,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if popover.isShown {
             popover.performClose(nil)
         } else {
+            // Refresh state when popover opens — cheap because tables are small.
+            coordinator.appState.reload()
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
             popover.contentViewController?.view.window?.makeKey()
         }
@@ -77,7 +86,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Detached windows
 
     private func openTaskList(initialFilter: SidebarFilter) {
-        appState.sidebarFilter = initialFilter
+        coordinator.appState.sidebarFilter = initialFilter
+        coordinator.appState.reload()
         if let window = taskListWindow {
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
@@ -85,8 +95,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let view = TaskListView()
-            .environment(appState)
-            .environment(\.toraAccent, appState.accent.color)
+            .environment(coordinator.appState)
+            .environment(\.toraAccent, coordinator.appState.accent.color)
 
         let controller = NSHostingController(rootView: view)
         let window = NSWindow(contentViewController: controller)
@@ -108,9 +118,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        let view = SettingsView()
-            .environment(appState)
-            .environment(\.toraAccent, appState.accent.color)
+        let view = SettingsView(coordinator: coordinator)
+            .environment(coordinator.appState)
+            .environment(\.toraAccent, coordinator.appState.accent.color)
 
         let controller = NSHostingController(rootView: view)
         let window = NSWindow(contentViewController: controller)
@@ -125,6 +135,72 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         settingsWindow = window
     }
 
+    // MARK: - Toast
+
+    private func startToastWatcher() {
+        // Poll every second for queued toasts. Wave 5 will replace this with a proper observation.
+        Task { @MainActor [weak self] in
+            while true {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                guard let self else { return }
+                if let toast = self.coordinator.appState.pendingToast {
+                    self.coordinator.appState.pendingToast = nil
+                    self.showToast(toast)
+                }
+            }
+        }
+    }
+
+    private func showToast(_ suggestion: SuggestionViewModel) {
+        toastWindow?.close()
+
+        let view = NotificationToastView(
+            suggestion: suggestion,
+            onAccept: { [weak self] in
+                self?.coordinator.appState.accept(suggestionId: suggestion.id)
+                self?.dismissToast()
+            },
+            onDismiss: { [weak self] in
+                self?.coordinator.appState.dismiss(suggestionId: suggestion.id)
+                self?.dismissToast()
+            },
+            onClose: { [weak self] in self?.dismissToast() }
+        )
+        .environment(\.toraAccent, coordinator.appState.accent.color)
+
+        let controller = NSHostingController(rootView: view)
+        let window = NSPanel(
+            contentViewController: controller
+        )
+        window.styleMask = [.borderless, .nonactivatingPanel]
+        window.isFloatingPanel = true
+        window.level = .floating
+        window.backgroundColor = .clear
+        window.isOpaque = false
+        window.hasShadow = false
+        window.collectionBehavior = [.canJoinAllSpaces, .stationary]
+        window.setContentSize(NSSize(width: 380, height: 200))
+        if let screen = NSScreen.main {
+            let frame = screen.visibleFrame
+            window.setFrameOrigin(NSPoint(x: frame.maxX - 380 - 14, y: frame.maxY - 220))
+        }
+        window.orderFrontRegardless()
+        toastWindow = window
+
+        // Auto-dismiss after 8 seconds if the user doesn't act.
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 8_000_000_000)
+            self?.dismissToast()
+        }
+    }
+
+    private func dismissToast() {
+        toastWindow?.close()
+        toastWindow = nil
+    }
+
+    // MARK: - First run
+
     func openFirstRun() {
         if let window = firstRunWindow {
             window.makeKeyAndOrderFront(nil)
@@ -134,8 +210,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.firstRunWindow?.close()
             self?.firstRunWindow = nil
         })
-        .environment(appState)
-        .environment(\.toraAccent, appState.accent.color)
+        .environment(coordinator.appState)
+        .environment(\.toraAccent, coordinator.appState.accent.color)
 
         let controller = NSHostingController(rootView: view)
         let window = NSWindow(contentViewController: controller)

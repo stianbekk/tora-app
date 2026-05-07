@@ -122,7 +122,7 @@ actor RelayServer {
         }
 
         if let handler {
-            try await handler.handle(payload: data, headers: request.headers)
+            try await handler.handle(payload: data, headers: flatten(request.headers))
         }
         return Response(status: .ok)
     }
@@ -136,9 +136,17 @@ actor RelayServer {
         let bytes = body.getBytes(at: 0, length: body.readableBytes) ?? []
         let data = Data(bytes)
         if let handler {
-            try await handler.handle(payload: data, headers: request.headers)
+            try await handler.handle(payload: data, headers: flatten(request.headers))
         }
         return Response(status: .ok)
+    }
+
+    private static func flatten(_ headers: HTTPFields) -> HandlerHeaders {
+        var out: HandlerHeaders = [:]
+        for field in headers {
+            out[field.name.canonicalName] = field.value
+        }
+        return out
     }
 }
 
@@ -185,10 +193,14 @@ enum SlackSignatureVerifier {
 
 // MARK: - Slack/Gmail handler protocols
 
+/// Headers passed to handlers as a flat dictionary so callers don't need
+/// to import Hummingbird types.
+typealias HandlerHeaders = [String: String]
+
 protocol SlackEventsHandler: AnyObject, Sendable {
-    func handle(payload: Data, headers: HTTPFields) async throws
+    func handle(payload: Data, headers: HandlerHeaders) async throws
 }
 
 protocol GmailPushHandler: AnyObject, Sendable {
-    func handle(payload: Data, headers: HTTPFields) async throws
+    func handle(payload: Data, headers: HandlerHeaders) async throws
 }

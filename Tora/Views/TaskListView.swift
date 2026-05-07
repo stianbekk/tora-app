@@ -3,6 +3,7 @@ import SwiftUI
 struct TaskListView: View {
     @Environment(AppState.self) private var state
     @State private var searchText: String = ""
+    @State private var showNewTask: Bool = false
 
     var body: some View {
         HSplitView {
@@ -12,6 +13,9 @@ struct TaskListView: View {
                 .frame(minWidth: 480)
         }
         .background(.ultraThinMaterial)
+        .sheet(isPresented: $showNewTask) {
+            NewTaskSheet().environment(state)
+        }
     }
 
     // MARK: Sidebar
@@ -132,7 +136,7 @@ struct TaskListView: View {
                         Text("Sort")
                     }
                 }.buttonStyle(.toraGhost)
-                Button {} label: {
+                Button { showNewTask = true } label: {
                     HStack(spacing: 6) {
                         Image(systemName: ToraIcon.plus).font(.system(size: 11))
                         Text("New")
