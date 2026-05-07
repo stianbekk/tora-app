@@ -15,11 +15,64 @@ struct PopoverView: View {
             Spacer(minLength: 0)
             taskFooter
             sourcesBar
+
+            // Hidden buttons exist solely to host keyboard shortcuts. SwiftUI
+            // requires a Button to bind a `.keyboardShortcut`.
+            keyboardShortcutsLayer
         }
         .frame(width: 380)
         .frame(minHeight: 360)
         .background(.ultraThinMaterial)
         .background(ToraTokens.surface)
+    }
+
+    private var keyboardShortcutsLayer: some View {
+        VStack(spacing: 0) {
+            Button("") { acceptFocused() }
+                .keyboardShortcut(.return, modifiers: .command)
+            Button("") { dismissFocused() }
+                .keyboardShortcut(.delete, modifiers: .command)
+            Button("") { focusPrevious() }
+                .keyboardShortcut(.upArrow, modifiers: [])
+            Button("") { focusNext() }
+                .keyboardShortcut(.downArrow, modifiers: [])
+        }
+        .frame(width: 0, height: 0)
+        .opacity(0)
+        .allowsHitTesting(false)
+    }
+
+    private func acceptFocused() {
+        guard let id = state.focusedSuggestionId else { return }
+        if state.inlineEditId == id { return } // editor handles ↵ itself
+        state.inlineEditId = id
+    }
+
+    private func dismissFocused() {
+        guard let id = state.focusedSuggestionId else { return }
+        state.dismiss(suggestionId: id)
+    }
+
+    private func focusPrevious() {
+        guard !state.suggestions.isEmpty else { return }
+        let ids = state.suggestions.map(\.id)
+        guard let current = state.focusedSuggestionId,
+              let idx = ids.firstIndex(of: current) else {
+            state.focusedSuggestionId = ids.first
+            return
+        }
+        state.focusedSuggestionId = ids[max(0, idx - 1)]
+    }
+
+    private func focusNext() {
+        guard !state.suggestions.isEmpty else { return }
+        let ids = state.suggestions.map(\.id)
+        guard let current = state.focusedSuggestionId,
+              let idx = ids.firstIndex(of: current) else {
+            state.focusedSuggestionId = ids.first
+            return
+        }
+        state.focusedSuggestionId = ids[min(ids.count - 1, idx + 1)]
     }
 
     // MARK: Header

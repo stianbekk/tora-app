@@ -182,12 +182,12 @@ actor ExtractionService {
 
     private func matchCustomer(name: String?) throws -> String? {
         guard let name, !name.isEmpty else { return nil }
-        return try customers.findByName(name)?.id
+        return try customers.fuzzyFind(name: name)?.id
     }
 
     private func matchProduct(name: String?) throws -> String? {
         guard let name, !name.isEmpty else { return nil }
-        return try products.findByName(name)?.id
+        return try products.fuzzyFind(name: name)?.id
     }
 
     private func parseDate(_ string: String?) -> Date? {

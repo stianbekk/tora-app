@@ -9,17 +9,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var settingsWindow: NSWindow?
     private var firstRunWindow: NSWindow?
     private var toastWindow: NSWindow?
+    private let hotkeys = GlobalHotkeyManager()
 
     private let coordinator = AppCoordinator()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupStatusItem()
         setupPopover()
+        registerHotkeys()
+
         Task { @MainActor in
             await coordinator.bootstrap()
+            applyInitialAppearance()
+            wirePreferenceCallbacks()
             updateBadge(count: coordinator.appState.pendingCount)
             startToastWatcher()
+            showFirstRunIfNeeded()
         }
+
         coordinator.notifications.statusItemBadgeUpdate = { [weak self] count in
             Task { @MainActor [weak self] in self?.updateBadge(count: count) }
         }
@@ -35,13 +42,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func setupStatusItem() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = item.button {
-            button.image = NSImage(named: "Mascot")
-            button.image?.size = NSSize(width: 18, height: 18)
-            button.image?.isTemplate = false
+            applyGlyph(.mascot, to: button)
             button.action = #selector(togglePopover(_:))
             button.target = self
         }
         statusItem = item
+    }
+
+    private func applyGlyph(_ variant: GlyphView.Variant, to button: NSStatusBarButton) {
+        switch variant {
+        case .mascot:
+            button.image = NSImage(named: "Mascot")
+            button.image?.size = NSSize(width: 18, height: 18)
+            button.image?.isTemplate = false
+        case .bolt:
+            button.image = NSImage(systemSymbolName: "bolt.fill", accessibilityDescription: "Tora")
+            button.image?.size = NSSize(width: 16, height: 16)
+            button.image?.isTemplate = true
+        case .rune:
+            button.image = NSImage(systemSymbolName: "t.square", accessibilityDescription: "Tora")
+            button.image?.size = NSSize(width: 16, height: 16)
+            button.image?.isTemplate = true
+        }
     }
 
     private func updateBadge(count: Int) {
@@ -66,6 +88,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         .environment(coordinator.appState)
         .environment(\.toraAccent, coordinator.appState.accent.color)
+        .preferredColorScheme(coordinator.appState.appearance.colorScheme)
 
         pop.contentViewController = NSHostingController(rootView: root)
         popover = pop
@@ -76,7 +99,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if popover.isShown {
             popover.performClose(nil)
         } else {
-            // Refresh state when popover opens — cheap because tables are small.
             coordinator.appState.reload()
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
             popover.contentViewController?.view.window?.makeKey()
@@ -97,6 +119,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let view = TaskListView()
             .environment(coordinator.appState)
             .environment(\.toraAccent, coordinator.appState.accent.color)
+            .preferredColorScheme(coordinator.appState.appearance.colorScheme)
 
         let controller = NSHostingController(rootView: view)
         let window = NSWindow(contentViewController: controller)
@@ -121,6 +144,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let view = SettingsView(coordinator: coordinator)
             .environment(coordinator.appState)
             .environment(\.toraAccent, coordinator.appState.accent.color)
+            .preferredColorScheme(coordinator.appState.appearance.colorScheme)
 
         let controller = NSHostingController(rootView: view)
         let window = NSWindow(contentViewController: controller)
@@ -138,7 +162,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Toast
 
     private func startToastWatcher() {
-        // Poll every second for queued toasts. Wave 5 will replace this with a proper observation.
         Task { @MainActor [weak self] in
             while true {
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
@@ -167,11 +190,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             onClose: { [weak self] in self?.dismissToast() }
         )
         .environment(\.toraAccent, coordinator.appState.accent.color)
+        .preferredColorScheme(coordinator.appState.appearance.colorScheme)
 
         let controller = NSHostingController(rootView: view)
-        let window = NSPanel(
-            contentViewController: controller
-        )
+        let window = NSPanel(contentViewController: controller)
         window.styleMask = [.borderless, .nonactivatingPanel]
         window.isFloatingPanel = true
         window.level = .floating
@@ -187,7 +209,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.orderFrontRegardless()
         toastWindow = window
 
-        // Auto-dismiss after 8 seconds if the user doesn't act.
         Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: 8_000_000_000)
             self?.dismissToast()
@@ -201,17 +222,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - First run
 
+    private func showFirstRunIfNeeded() {
+        guard !coordinator.appState.firstRunComplete else { return }
+        openFirstRun()
+    }
+
     func openFirstRun() {
         if let window = firstRunWindow {
             window.makeKeyAndOrderFront(nil)
             return
         }
         let view = FirstRunView(onDone: { [weak self] in
+            self?.coordinator.appState.markFirstRunComplete()
             self?.firstRunWindow?.close()
             self?.firstRunWindow = nil
         })
         .environment(coordinator.appState)
         .environment(\.toraAccent, coordinator.appState.accent.color)
+        .preferredColorScheme(coordinator.appState.appearance.colorScheme)
 
         let controller = NSHostingController(rootView: view)
         let window = NSWindow(contentViewController: controller)
@@ -224,5 +252,56 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         firstRunWindow = window
+    }
+
+    // MARK: - Theming + lifecycle
+
+    private func applyInitialAppearance() {
+        let state = coordinator.appState
+        if let button = statusItem?.button {
+            applyGlyph(state.glyphVariant, to: button)
+        }
+        applyDockVisibility(state.showInDock)
+        applyAppearance(state.appearance)
+        if state.launchAtLogin {
+            LaunchAtLogin.setEnabled(true)
+        }
+    }
+
+    private func wirePreferenceCallbacks() {
+        let state = coordinator.appState
+        state.onGlyphChanged = { [weak self] variant in
+            guard let button = self?.statusItem?.button else { return }
+            self?.applyGlyph(variant, to: button)
+        }
+        state.onAppearanceChanged = { [weak self] mode in
+            self?.applyAppearance(mode)
+        }
+        state.onShowInDockChanged = { [weak self] show in
+            self?.applyDockVisibility(show)
+        }
+        state.onLaunchAtLoginChanged = { enabled in
+            LaunchAtLogin.setEnabled(enabled)
+        }
+    }
+
+    private func applyAppearance(_ mode: AppearanceMode) {
+        switch mode {
+        case .system: NSApp.appearance = nil
+        case .light:  NSApp.appearance = NSAppearance(named: .aqua)
+        case .dark:   NSApp.appearance = NSAppearance(named: .darkAqua)
+        }
+    }
+
+    private func applyDockVisibility(_ show: Bool) {
+        NSApp.setActivationPolicy(show ? .regular : .accessory)
+    }
+
+    // MARK: - Hotkeys
+
+    private func registerHotkeys() {
+        hotkeys.register(.togglePopover) { [weak self] in
+            self?.togglePopover(nil)
+        }
     }
 }

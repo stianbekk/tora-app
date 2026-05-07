@@ -74,6 +74,16 @@ struct CustomerRepository {
         }
     }
 
+    /// Fuzzy match against all customer names. Returns nil if no candidate clears
+    /// `FuzzyMatch.defaultThreshold` — we'd rather leave the link empty than
+    /// mis-attribute to the wrong customer.
+    func fuzzyFind(name: String) throws -> Customer? {
+        let all = try all()
+        let names = all.map(\.name)
+        guard let bestName = FuzzyMatch.bestMatch(for: name, in: names) else { return nil }
+        return all.first(where: { $0.name == bestName })
+    }
+
     func save(_ customer: Customer) throws {
         try dbQueue.write { db in
             var copy = customer
@@ -123,6 +133,14 @@ struct ProductRepository {
         try dbQueue.read { db in
             try Product.filter(Column("name") == name).fetchOne(db)
         }
+    }
+
+    /// Fuzzy match against all product names. See CustomerRepository.fuzzyFind.
+    func fuzzyFind(name: String) throws -> Product? {
+        let all = try all()
+        let names = all.map(\.name)
+        guard let bestName = FuzzyMatch.bestMatch(for: name, in: names) else { return nil }
+        return all.first(where: { $0.name == bestName })
     }
 
     func save(_ product: Product) throws {

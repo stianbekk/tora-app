@@ -16,6 +16,24 @@ struct TaskListView: View {
         .sheet(isPresented: $showNewTask) {
             NewTaskSheet().environment(state)
         }
+        .background(keyboardShortcutsLayer)
+    }
+
+    private var keyboardShortcutsLayer: some View {
+        VStack(spacing: 0) {
+            Button("") { showNewTask = true }
+                .keyboardShortcut("n", modifiers: .command)
+            Button("") { toggleSelectedTask() }
+                .keyboardShortcut("d", modifiers: .command)
+        }
+        .frame(width: 0, height: 0)
+        .opacity(0)
+        .allowsHitTesting(false)
+    }
+
+    private func toggleSelectedTask() {
+        guard let id = state.selectedTaskId else { return }
+        state.toggleComplete(taskId: id)
     }
 
     // MARK: Sidebar

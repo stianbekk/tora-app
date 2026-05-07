@@ -96,12 +96,33 @@ final class AppState {
     var selectedTaskId: String?
     var sidebarFilter: SidebarFilter = .inbox
 
-    var accent: AccentPreset = .tora
-    var glyphVariant: GlyphView.Variant = .mascot
-    var appearance: AppearanceMode = .system
+    var accent: AccentPreset = .tora {
+        didSet { persistPreferences() }
+    }
+    var glyphVariant: GlyphView.Variant = .mascot {
+        didSet { persistPreferences(); onGlyphChanged?(glyphVariant) }
+    }
+    var appearance: AppearanceMode = .system {
+        didSet { persistPreferences(); onAppearanceChanged?(appearance) }
+    }
+    var showInDock: Bool = false {
+        didSet { persistPreferences(); onShowInDockChanged?(showInDock) }
+    }
+    var launchAtLogin: Bool = true {
+        didSet { persistPreferences(); onLaunchAtLoginChanged?(launchAtLogin) }
+    }
+
+    /// Side-effect callbacks installed by AppDelegate. Internal to this module.
+    var onGlyphChanged: ((GlyphView.Variant) -> Void)?
+    var onAppearanceChanged: ((AppearanceMode) -> Void)?
+    var onShowInDockChanged: ((Bool) -> Void)?
+    var onLaunchAtLoginChanged: ((Bool) -> Void)?
 
     /// Queued toast — popped by the menu bar host when ready.
     var pendingToast: SuggestionViewModel?
+
+    /// Used by AppDelegate to decide if the first-run wizard should appear.
+    var firstRunComplete: Bool = false
 
     // MARK: Dependencies
 
@@ -111,6 +132,8 @@ final class AppState {
     private let productsRepo: ProductRepository
     private let sourcesRepo: SourceRepository
     private let settingsRepo: SettingsRepository
+    private let preferences: PreferencesStore
+    private var suppressPersist: Bool = false
 
     init(
         suggestions: SuggestionRepository = SuggestionRepository(),
@@ -126,13 +149,49 @@ final class AppState {
         self.productsRepo = products
         self.sourcesRepo = sources
         self.settingsRepo = settings
+        self.preferences = PreferencesStore(repo: settings)
     }
 
     // MARK: - Bootstrap
 
     func bootstrap() {
         seedIfNeeded()
+        loadPreferences()
         reload()
+    }
+
+    private func loadPreferences() {
+        suppressPersist = true
+        defer { suppressPersist = false }
+        if let raw = preferences.string(.accentPreset),
+           let preset = AccentPreset(rawValue: raw) {
+            accent = preset
+        }
+        if let raw = preferences.string(.glyphVariant),
+           let variant = GlyphView.Variant(rawValue: raw) {
+            glyphVariant = variant
+        }
+        if let raw = preferences.string(.appearanceMode),
+           let mode = AppearanceMode(rawValue: raw) {
+            appearance = mode
+        }
+        showInDock     = preferences.bool(.showInDock, default: false)
+        launchAtLogin  = preferences.bool(.launchAtLogin, default: true)
+        firstRunComplete = preferences.bool(.firstRunComplete, default: false)
+    }
+
+    func markFirstRunComplete() {
+        firstRunComplete = true
+        preferences.setBool(.firstRunComplete, true)
+    }
+
+    private func persistPreferences() {
+        guard !suppressPersist else { return }
+        preferences.setString(.accentPreset, accent.rawValue)
+        preferences.setString(.glyphVariant, glyphVariant.rawValue)
+        preferences.setString(.appearanceMode, appearance.rawValue)
+        preferences.setBool(.showInDock, showInDock)
+        preferences.setBool(.launchAtLogin, launchAtLogin)
     }
 
     /// Re-fetch everything from the database. Cheap because all tables are tiny.

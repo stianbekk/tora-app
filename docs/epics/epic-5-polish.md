@@ -3,7 +3,7 @@
 > Keyboard shortcuts, theming, app lifecycle, fuzzy matching.
 
 **Wave:** 5
-**Status:** Not started
+**Status:** Complete
 **Depends on:** Wave 4
 
 ---
@@ -15,14 +15,14 @@
 
 | # | Task | Status | Description |
 |---|------|--------|-------------|
-| 5.1 | Global hotkey: toggle popover | [ ] | ⌘⇧T via `NSEvent.addGlobalMonitorForEvents` |
-| 5.2 | Accept focused suggestion | [ ] | ⌘↵ when popover is active |
-| 5.3 | Dismiss focused suggestion | [ ] | ⌘⌫ when popover is active |
-| 5.4 | Quick add task | [ ] | ⌘N opens manual task creation |
-| 5.5 | Navigate suggestions | [ ] | ↑/↓ moves focus through suggestion list |
-| 5.6 | Open task list | [ ] | ⌘L opens/focuses task list window |
-| 5.7 | Mark complete | [ ] | ⌘D toggles completion on focused task |
-| 5.8 | Shortcut remapping | [ ] | Store custom bindings in settings, re-register monitors |
+| 5.1 | Global hotkey: toggle popover | [x] | ⌘⇧T via `NSEvent.addGlobalMonitorForEvents` |
+| 5.2 | Accept focused suggestion | [x] | ⌘↵ when popover is active |
+| 5.3 | Dismiss focused suggestion | [x] | ⌘⌫ when popover is active |
+| 5.4 | Quick add task | [x] | ⌘N opens manual task creation |
+| 5.5 | Navigate suggestions | [x] | ↑/↓ moves focus through suggestion list |
+| 5.6 | Open task list | [x] | ⌘L opens/focuses task list window |
+| 5.7 | Mark complete | [x] | ⌘D toggles completion on focused task |
+| 5.8 | Shortcut remapping | [x] | Store custom bindings in settings, re-register monitors |
 
 ---
 
@@ -33,10 +33,10 @@
 
 | # | Task | Status | Description |
 |---|------|--------|-------------|
-| 5.9 | System appearance tracking | [ ] | `.preferredColorScheme` follows system, or manual override |
-| 5.10 | Accent color picker | [ ] | 5 presets (Tora purple, amber, emerald, crimson, slate). See `docs/spec/design.md` |
-| 5.11 | Menu bar icon variant | [ ] | Toggle between mascot, bolt, rune in settings |
-| 5.12 | Persist theme preferences | [ ] | Store in SQLite settings table, apply on launch |
+| 5.9 | System appearance tracking | [x] | `.preferredColorScheme` follows system, or manual override |
+| 5.10 | Accent color picker | [x] | 5 presets (Tora purple, amber, emerald, crimson, slate). See `docs/spec/design.md` |
+| 5.11 | Menu bar icon variant | [x] | Toggle between mascot, bolt, rune in settings |
+| 5.12 | Persist theme preferences | [x] | Store in SQLite settings table, apply on launch |
 
 ---
 
@@ -47,10 +47,10 @@
 
 | # | Task | Status | Description |
 |---|------|--------|-------------|
-| 5.13 | Launch at login | [ ] | `SMAppService.register` for login items |
-| 5.14 | First-run detection | [ ] | Check settings for `first_run_complete`, show wizard if false |
-| 5.15 | Graceful shutdown | [ ] | Stop relay server, close database, cancel pending API calls |
-| 5.16 | Show/hide dock icon | [ ] | Toggle `NSApp.setActivationPolicy` based on setting |
+| 5.13 | Launch at login | [x] | `SMAppService.register` for login items |
+| 5.14 | First-run detection | [x] | Check settings for `first_run_complete`, show wizard if false |
+| 5.15 | Graceful shutdown | [x] | Stop relay server, close database, cancel pending API calls |
+| 5.16 | Show/hide dock icon | [x] | Toggle `NSApp.setActivationPolicy` based on setting |
 
 ---
 
@@ -61,7 +61,7 @@
 
 | # | Task | Status | Description |
 |---|------|--------|-------------|
-| 5.17 | Fuzzy name matching | [ ] | Match AI-returned names against local customer/product tables |
-| 5.18 | Match confidence threshold | [ ] | Only auto-link if similarity > threshold, otherwise leave unlinked |
-| 5.19 | Suggestion enrichment | [ ] | Populate `customer_id` and `product_id` on suggestion creation |
-| 5.20 | New entity prompt | [ ] | When no match found on accept, offer to create new customer/product |
+| 5.17 | Fuzzy name matching | [x] | Match AI-returned names against local customer/product tables |
+| 5.18 | Match confidence threshold | [x] | Only auto-link if similarity > threshold, otherwise leave unlinked |
+| 5.19 | Suggestion enrichment | [x] | Populate `customer_id` and `product_id` on suggestion creation |
+| 5.20 | New entity prompt | [x] | When no match found on accept, offer to create new customer/product |
